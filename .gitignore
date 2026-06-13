@@ -1,0 +1,8 @@
+platform/.env
+*.pyc
+__pycache__/
+.DS_Store
+*.pth
+models/
+/tmp/ft_*.jsonl
+/tmp/ft_model/

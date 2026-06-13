@@ -1,0 +1,31 @@
+gateway:
+  host: 0.0.0.0
+  port: 8080
+  api_key: ${GATEWAY_API_KEY}
+
+cache:
+  similarity_threshold: 0.92
+  default_ttl_hours: null    # null = 無期限
+
+router:
+  local_confidence_threshold: 0.85
+  fallback_to_external: true
+
+llm:
+  default_provider: claude
+  providers:
+    claude:
+      model: claude-sonnet-4-6
+      api_key: ${ANTHROPIC_API_KEY}
+    openai:
+      model: gpt-4o-mini
+      api_key: ${OPENAI_API_KEY}
+    ollama:
+      model: llama3.1:8b
+      base_url: ${OLLAMA_BASE_URL}
+
+finetuning:
+  schedule: "0 2 * * 0"     # 毎週日曜 2:00 AM
+  min_samples: 500
+  quality_threshold: 0.8
+  lora_rank: 16
