@@ -11,7 +11,7 @@
 | OS | Linux / macOS (Docker が動けば可) |
 | Docker | 24.x 以上 + Docker Compose v2 (`docker compose` コマンド) |
 | GPU | NVIDIA GPU 推奨 (CPU のみでも動作可。ファインチューニングは GPU 必須) |
-| 外部 API キー | Anthropic または OpenAI のいずれか一方でも可 |
+| 外部 API キー | Anthropic / OpenAI / Google Gemini のいずれか一方でも可 |
 
 ---
 
@@ -21,9 +21,9 @@
 
 | コマンド | 起動サービス | RAM | 必要なキー |
 |---|---|---|---|
-| `make up-lite` | gateway + postgres のみ | **2 GB** | OPENAI_API_KEY (埋め込み + チャット) |
-| `make up-standard` | + Ollama (ローカル LLM) | 16 GB | ANTHROPIC_API_KEY or OPENAI_API_KEY |
-| `make up` | 全サービス (+ 監視) | 16 GB | ANTHROPIC_API_KEY or OPENAI_API_KEY |
+| `make up-lite` | gateway + postgres のみ | **2 GB** | ANTHROPIC_API_KEY / OPENAI_API_KEY / GOOGLE_API_KEY のいずれか |
+| `make up-standard` | + Ollama (ローカル LLM) | 16 GB | ANTHROPIC_API_KEY / OPENAI_API_KEY / GOOGLE_API_KEY のいずれか |
+| `make up` | 全サービス (+ 監視) | 16 GB | ANTHROPIC_API_KEY / OPENAI_API_KEY / GOOGLE_API_KEY のいずれか |
 
 ### 手順
 
@@ -44,7 +44,8 @@ make up-lite            # 低スペック環境 (2GB RAM, VPS 等)
 
 ```env
 ANTHROPIC_API_KEY=sk-ant-xxxxxxxxxxxx   # Claude 利用時
-OPENAI_API_KEY=sk-xxxxxxxxxxxx          # OpenAI 利用時 (Lite モードでは必須)
+OPENAI_API_KEY=sk-xxxxxxxxxxxx          # OpenAI 利用時
+GOOGLE_API_KEY=AIzaxxxxxxxxxxxx         # Gemini 利用時
 GATEWAY_API_KEY=your-secure-random-key  # ゲートウェイ認証トークン
 POSTGRES_PASSWORD=gateway               # DB パスワード
 ```
@@ -173,6 +174,7 @@ curl http://localhost:8080/v1/chat/completions \
 | `auto` | Router が自動判定して local / external を選択 |
 | `claude` | Claude (Anthropic) を強制指定 |
 | `openai` | OpenAI を強制指定 |
+| `gemini` | Google Gemini を強制指定 |
 | `ollama` | ローカル LLM を強制指定 |
 
 ### 利用可能モデル一覧
@@ -294,7 +296,7 @@ docker compose -f platform/docker-compose.yml restart gateway
 | `cache.similarity_threshold` | `0.92` | キャッシュヒット判定の類似度閾値 (下げると積極的にキャッシュ利用) |
 | `router.local_confidence_threshold` | `0.85` | ローカル LLM に回す信頼スコア下限 |
 | `router.fallback_to_external` | `true` | ローカル LLM 失敗時に外部 LLM へフォールバック |
-| `llm.default_provider` | `claude` | デフォルトの外部 LLM プロバイダー |
+| `llm.default_provider` | `claude` | デフォルトの外部 LLM プロバイダー (`claude` / `openai` / `gemini`) |
 | `finetuning.schedule` | `0 2 * * 0` | ファインチューニング実行スケジュール (cron 式) |
 | `finetuning.min_samples` | `500` | 自動実行に必要な最低データ件数 |
 | `finetuning.quality_threshold` | `0.8` | 学習データに使う品質スコア下限 |

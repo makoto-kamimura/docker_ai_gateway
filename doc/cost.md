@@ -5,7 +5,8 @@
 | プロバイダー | モデル | 入力 | 出力 | 必要 RAM |
 |---|---|---|---|---|
 | **Ollama（ローカル）** | llama3.1:8b | $0 | $0 | 16 GB |
-| **OpenAI** | gpt-4o-mini | ~$0.15 | ~$0.60 | 2 GB（API） |
+| **Google Gemini** | gemini-2.0-flash | $0.10 | $0.40 | 2 GB（API） |
+| **OpenAI** | gpt-4o-mini | $0.15 | $0.60 | 2 GB（API） |
 | **Claude** | claude-haiku-4-5 | $1.00 | $5.00 | 2 GB（API） |
 | **Claude** | claude-sonnet-4-6 ← デフォルト | $3.00 | $15.00 | 2 GB（API） |
 | **Claude** | claude-opus-4-8 | $5.00 | $25.00 | 2 GB（API） |
@@ -25,6 +26,25 @@ make up-standard
 ```
 
 ### 有料 API で最安（RAM 2 GB、VPS 可）
+
+```yaml
+# app/config.yaml
+llm:
+  default_provider: gemini
+  providers:
+    gemini:
+      model: gemini-2.0-flash
+      api_key: ${GOOGLE_API_KEY}
+```
+
+```bash
+make up-lite
+```
+
+> Google AI Studio の無料枠（1,500 RPD / 15 RPM）はデモ・検証に十分。
+> 高トラフィック時は Google Cloud プロジェクトに請求先を設定する。
+
+### OpenAI gpt-4o-mini
 
 ```yaml
 # app/config.yaml
@@ -62,6 +82,6 @@ llm:
 
 | コマンド | プロバイダー | 費用 |
 |---|---|---|
-| `make up-lite` | Claude / OpenAI（API キー必須） | 従量課金 |
+| `make up-lite` | Claude / OpenAI / Gemini（API キー必須） | 従量課金 |
 | `make up-standard` | Ollama（+ API フォールバック可） | **無料**（Ollama のみ使用時） |
 | `make up` | フル構成（Ollama + 監視） | **無料**（Ollama のみ使用時） |

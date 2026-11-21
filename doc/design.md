@@ -43,7 +43,7 @@
 │  信頼高       信頼低                                               │
 │      ▼           ▼                                               │
 │  ┌────────┐  ┌──────────┐                                        │
-│  │Local   │  │外部 LLM  │  Claude / OpenAI                       │
+│  │Local   │  │外部 LLM  │  Claude / OpenAI / Gemini              │
 │  │LLM     │  │Connector │                                        │
 │  │(Ollama)│  └────┬─────┘                                        │
 │  └────────┘       │                                              │
@@ -167,6 +167,7 @@ class BaseLLMConnector(ABC):
 |---|---|---|
 | Claude | `connectors/anthropic.py` | anthropic |
 | OpenAI | `connectors/openai_connector.py` | openai |
+| Gemini | `connectors/gemini.py` | google-genai |
 | Ollama | `connectors/ollama.py` | httpx (REST) |
 
 ---
@@ -369,7 +370,7 @@ Full モード + Unsloth LoRA 学習を同一マシンで実行する場合。
 | ベクトル埋め込み | nomic-embed-text (Ollama) |
 | ローカル LLM | Ollama + llama3.1:8b |
 | ファインチューニング | Unsloth + LoRA (GPU 環境のみ) |
-| 外部 LLM | anthropic SDK / openai SDK |
+| 外部 LLM | anthropic SDK / openai SDK / google-genai SDK |
 | スケジューラー | APScheduler (FastAPI lifespan 内) |
 | コンテナ | Docker Compose |
 | 監視 | Prometheus + Grafana (ダッシュボード自動設定) |
@@ -410,6 +411,7 @@ docker_ai_gateway/
     │   │   ├── base.py                 BaseLLMConnector 抽象クラス
     │   │   ├── anthropic.py            Claude
     │   │   ├── openai_connector.py     OpenAI
+    │   │   ├── gemini.py               Google Gemini
     │   │   └── ollama.py               ローカル LLM
     │   ├── router/
     │   │   └── llm_router.py           信頼スコア計算・ルーティング判定
@@ -458,6 +460,9 @@ llm:
     ollama:
       model: llama3.1:8b
       base_url: ${OLLAMA_BASE_URL}
+    gemini:
+      model: gemini-2.0-flash
+      api_key: ${GOOGLE_API_KEY}
 
 finetuning:
   schedule: "0 2 * * 0"     # 毎週日曜 2:00 AM
