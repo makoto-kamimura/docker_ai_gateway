@@ -46,6 +46,10 @@ def _build_connector(provider: str):
             base_url=cfg.base_url or settings.ollama_base_url,
             model=cfg.model,
         )
+    if provider == "gemini":
+        from gateway.connectors.gemini import GeminiConnector
+        cfg = providers.get("gemini")
+        return GeminiConnector(api_key=cfg.api_key or "", model=cfg.model)
     raise ValueError(f"Unknown provider: {provider}")
 
 
