@@ -173,7 +173,6 @@ curl http://localhost:8080/v1/admin/finetuning/status \
 
 - [設計仕様](docs/design.md) — アーキテクチャ・スペック要件・ルーティングロジック
 - [運用マニュアル](docs/operation.md) — 詳細セットアップ・管理 API・トラブルシューティング
-- [タスク](docs/task.md) — 実装済み機能・残タスク一覧
 - [コスト比較](docs/cost.md) — プロバイダー別料金・推奨構成・コスト削減のポイント
 
 ## スペック要件
