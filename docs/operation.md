@@ -1,6 +1,6 @@
 # AI Gateway — 運用マニュアル
 
-設計仕様: [design.md](./design.md) | タスク: [task.md](./task.md)
+設計仕様: [design.md](./design.md)
 
 ---
 
