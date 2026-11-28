@@ -6,3 +6,4 @@ __pycache__/
 models/
 /tmp/ft_*.jsonl
 /tmp/ft_model/
+.pytest_cache/

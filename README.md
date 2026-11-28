@@ -32,9 +32,22 @@ AI Gateway は、**問い合わせを1か所で中継し、答えを蓄積して
 
 | 項目 | 内容 |
 |---|---|
-| ステータス | **試作**（中継・セマンティックキャッシュ・振り分け・Q&A の蓄積・ファインチューニングの処理を実装済み。自動テストは未整備） |
+| ステータス | **試作**（中継・セマンティックキャッシュ・振り分け・Q&A の蓄積・ファインチューニングの処理を実装済み。自動テストはキャッシュの判定とその周りだけ。2026-11 に役割を見直した（下記）） |
 | 作成者 | **Makoto Kamimura** — [@makoto-kamimura](https://github.com/makoto-kamimura) |
 | ライセンス | [MIT](LICENSE) |
+
+## 役割の見直し（2026-11）
+
+小さなサーバーで複数のアプリから使うにあたり、次のように改めました（詳細は [設計仕様 1.1 節・10.1 節](docs/design.md#11-役割の見直し2026-11)）。
+
+- **セマンティックキャッシュは、既定ではローカルモデル（Ollama）が答える要求だけ**で使います。設定の 2 つのスイッチで切り替えられます（[設計仕様 3.2 節](docs/design.md#32-semantic-cache)）。
+  - `cache.enabled`（環境変数 `GATEWAY_CACHE_ENABLED`）：キャッシュを使うか。既定は `true`。
+  - `cache.local_only`（環境変数 `GATEWAY_CACHE_LOCAL_ONLY`）：ローカルモデルの答えだけに限るか。既定は `true`。`false` にすると外部の LLM の答えもキャッシュします。
+  - どちらの場合も、検索と保存は `metadata.app` と `metadata.tenant` が両方一致する範囲に限ります。要求ごとに止めるときは `metadata` に `"cache": false` を付けます。
+- テストは `make test`（`app/tests/`。DB・LLM には触れません）。
+- **Knowledge Store（質問と答えの蓄積）は既定で止めます**（`knowledge.enabled: false`）。
+- **認証なしのステータスページは既定で出しません**（`status.public: false`）。
+- 中心の役割は「アプリから LLM への共通の経路」（アプリごとのキー・上限・利用ログ）と「MCP の入口」（計画）です。
 
 ## クイックスタート
 
@@ -48,7 +61,7 @@ vim platform/.env   # API キーを設定
 make up-lite        # 起動
 ```
 
-ブラウザで `http://localhost:8080/` を開くと利用方法と蓄積データが確認できます。
+`app/config.yaml` で `status.public: true` にすると、ブラウザで `http://localhost:8080/` を開いて利用方法と蓄積データを確認できます（既定は非公開）。
 
 ## 起動モード
 
@@ -120,7 +133,7 @@ print(response.choices[0].message.content)
 
 レスポンスの `metadata.source` で応答元を確認できます: `cache` / `local` / `external`
 
-## ステータスページ (認証不要)
+## ステータスページ (認証不要。`status.public: true` のときだけ)
 
 ```
 http://localhost:8080/

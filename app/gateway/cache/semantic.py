@@ -5,15 +5,20 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
+from gateway.cache import policy
 from gateway.config import settings
 from gateway.db import get_pool
 
 
 async def search(
     query_vec: list[float],
-    tenant: str = "",
+    app: str,
+    tenant: str,
 ) -> Optional[dict]:
-    """類似度が閾値を超えるキャッシュエントリを返す。なければ None。"""
+    """類似度が閾値を超えるキャッシュエントリを返す。なければ None。
+    app と tenant が両方とも一致するものだけを探す（ほかのアプリ・テナントの答えを返さない）。"""
+    if not app or not tenant:
+        return None
     pool = await get_pool()
     threshold = settings.cache.similarity_threshold
     async with pool.acquire() as conn:
@@ -21,13 +26,14 @@ async def search(
             """
             SELECT id, response, 1 - (query_vec <=> $1::vector) AS similarity
             FROM cache_entries
-            WHERE ($2 = '' OR tenant = $2)
+            WHERE app = $2 AND tenant = $3
               AND (ttl_expires IS NULL OR ttl_expires > NOW())
-              AND 1 - (query_vec <=> $1::vector) > $3
+              AND 1 - (query_vec <=> $1::vector) > $4
             ORDER BY query_vec <=> $1::vector
             LIMIT 1
             """,
             query_vec,
+            app,
             tenant,
             threshold,
         )
@@ -49,6 +55,9 @@ async def store(
     app: str = "",
     tenant: str = "",
 ) -> None:
+    # 設定で許した答え（既定はローカルモデルの答え）で、アプリとテナントが分かるものだけを保存する
+    if not policy.store_allowed(settings.cache, source, app, tenant):
+        return
     pool = await get_pool()
     ttl_hours = settings.cache.default_ttl_hours
     ttl_expires = None

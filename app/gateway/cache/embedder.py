@@ -29,6 +29,11 @@ async def embed(text: str) -> list[float]:
     )
 
 
+async def embed_local(text: str) -> list[float]:
+    """ローカル（Ollama）だけでベクトル化する。キャッシュの検索・保存はこちらを使い、外部には送らない。"""
+    return await _ollama_embed(text)
+
+
 async def is_available() -> bool:
     """埋め込みプロバイダーが 1 つ以上利用可能かどうかを確認する。"""
     try:
