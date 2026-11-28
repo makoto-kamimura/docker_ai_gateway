@@ -12,11 +12,10 @@ from pydantic import BaseModel
 
 from gateway import metrics
 from gateway.auth import verify_token
-from gateway.cache import embedder, semantic
+from gateway.cache import embedder, policy, semantic
 from gateway.config import settings
 from gateway.connectors.base import ChatResponse, Message
 from gateway.knowledge import store
-from gateway.router import llm_router
 
 router = APIRouter()
 
@@ -93,6 +92,7 @@ async def _stream_response(
     model: str,
     query_text: str,
     provider: str,
+    source: str,
     app: str,
     tenant: str,
 ) -> AsyncIterator[str]:
@@ -102,10 +102,25 @@ async def _stream_response(
         yield _sse_chunk(chunk, model)
     yield _sse_chunk("", model, finish=True)
     yield "data: [DONE]\n\n"
-    # バックグラウンドで Knowledge Store に保存
-    asyncio.create_task(
-        store.save("".join(full), provider=provider, query_text=query_text, app=app, tenant=tenant)
-    )
+    # Knowledge Store は有効なときだけ保存する（ストリーミングの答えはキャッシュしない）
+    if _should_store_knowledge(source):
+        asyncio.create_task(
+            store.save(query_text=query_text, response_text="".join(full), provider=provider, app=app, tenant=tenant)
+        )
+
+
+def _resolve_provider(model: str) -> str:
+    """要求の model から使うプロバイダーを決める（auto は既定のプロバイダー。local は Ollama）。"""
+    if model in ("local", "ollama"):
+        return "ollama"
+    if model == "auto":
+        return "ollama" if settings.llm.default_provider in ("local", "ollama") else settings.llm.default_provider
+    return model
+
+
+def _should_store_knowledge(source: str) -> bool:
+    k = settings.knowledge
+    return k.enabled and (source == "local" or not k.local_only)
 
 
 @router.post("/v1/chat/completions")
@@ -120,31 +135,32 @@ async def chat_completions(
     meta = req.metadata or {}
     app = meta.get("app", "")
     tenant = meta.get("tenant", "")
+    opt_out = policy.request_opt_out(meta)
 
     start = time.time()
 
-    # 1. セマンティックキャッシュ検索
-    try:
-        query_vec = await embedder.embed(query_text)
-        cached = await semantic.search(query_vec, tenant=tenant)
-    except Exception:
-        query_vec = []
-        cached = None
+    # 1. プロバイダーを決める（以前は、キャッシュの類似度とローカルモデルの精度から自動で振り分けていたが、
+    #    キャッシュをローカルモデルの要求だけに限ったため、明示の指定と既定のプロバイダーで決める）
+    provider_name = _resolve_provider(req.model)
 
-    if cached:
-        duration = time.time() - start
-        metrics.requests_total.labels(source="cache").inc()
-        metrics.request_duration.labels(source="cache").observe(duration)
-        cached["metadata"] = {"source": "cache"}
-        return cached
-
-    # 2. ルーター判定
-    cache_sim = 0.0  # キャッシュミスなので類似度 0
-    route = await llm_router.decide(cache_similarity=cache_sim)
-    if route == "local":
-        provider_name = "ollama"
-    else:
-        provider_name = req.model if req.model != "auto" else settings.llm.default_provider
+    # 2. セマンティックキャッシュ（設定の cache.enabled / cache.local_only。埋め込みはローカルだけで作る）
+    query_vec: list[float] = []
+    if policy.lookup_allowed(settings.cache, provider_name, app, tenant, opt_out):
+        try:
+            # ローカルモデルの要求は、埋め込みもローカルだけで作る（外部に送らない）。
+            # 外部の LLM の要求（local_only: false のときだけ来る）は、質問文をもともと外部に送るため、従来の経路（Ollama → OpenAI）で作る
+            embed = embedder.embed_local if provider_name == policy.LOCAL_PROVIDER else embedder.embed
+            query_vec = await embed(query_text)
+            cached = await semantic.search(query_vec, app=app, tenant=tenant)
+        except Exception:
+            query_vec = []
+            cached = None
+        if cached:
+            duration = time.time() - start
+            metrics.requests_total.labels(source="cache").inc()
+            metrics.request_duration.labels(source="cache").observe(duration)
+            cached["metadata"] = {"source": "cache"}
+            return cached
 
     connector = _build_connector(provider_name)
     model_label = settings.llm.providers.get(provider_name, {})
@@ -162,7 +178,7 @@ async def chat_completions(
             gen = connector.chat_stream(messages, **kwargs)
         except Exception:
             if settings.router.fallback_to_external and provider_name == "ollama":
-                provider_name = settings.llm.default_provider
+                provider_name = settings.llm.default_provider if settings.llm.default_provider not in ("local", "ollama") else "claude"
                 connector = _build_connector(provider_name)
                 gen = connector.chat_stream(messages, **kwargs)
                 source = "external"
@@ -170,7 +186,7 @@ async def chat_completions(
                 raise
 
         return StreamingResponse(
-            _stream_response(gen, model_str, query_text, provider_name, app, tenant),
+            _stream_response(gen, model_str, query_text, provider_name, source, app, tenant),
             media_type="text/event-stream",
             headers={"X-Cache": "MISS", "X-Source": source},
         )
@@ -180,7 +196,7 @@ async def chat_completions(
         resp: ChatResponse = await connector.chat(messages, **kwargs)
     except Exception:
         if settings.router.fallback_to_external and provider_name == "ollama":
-            provider_name = settings.llm.default_provider
+            provider_name = settings.llm.default_provider if settings.llm.default_provider not in ("local", "ollama") else "claude"
             connector = _build_connector(provider_name)
             resp = await connector.chat(messages, **kwargs)
             source = "external"
@@ -202,16 +218,17 @@ async def chat_completions(
     }
     body = _openai_response(resp.content, model_str, source, usage)
 
-    # 5. Knowledge Store・キャッシュに非同期保存
+    # 5. Knowledge Store（有効なときだけ）・キャッシュ（設定で許した答えだけ）に非同期保存
     async def _save():
-        await store.save(
-            query_text=query_text,
-            response_text=resp.content,
-            provider=provider_name,
-            app=app,
-            tenant=tenant,
-        )
-        if query_vec:
+        if _should_store_knowledge(source):
+            await store.save(
+                query_text=query_text,
+                response_text=resp.content,
+                provider=provider_name,
+                app=app,
+                tenant=tenant,
+            )
+        if query_vec and policy.store_allowed(settings.cache, source, app, tenant, opt_out):
             await semantic.store(
                 query_text=query_text,
                 query_vec=query_vec,

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import httpx
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse
 
 from gateway.cache.semantic import get_stats as cache_stats
@@ -20,9 +20,16 @@ async def _ollama_available() -> bool:
         return False
 
 
+def _require_public() -> None:
+    """ステータスページは、設定 status.public が true のときだけ出す（既定は出さない）。"""
+    if not settings.status.public:
+        raise HTTPException(status_code=404)
+
+
 @router.get("/stats")
 async def public_stats():
-    """認証不要の公開統計 API。蓄積データの概要を返す。"""
+    """認証不要の公開統計 API。蓄積データの概要を返す（status.public が true のときだけ）。"""
+    _require_public()
     k = await knowledge_stats()
     c = await cache_stats()
     domains = await get_domain_stats()
@@ -48,7 +55,8 @@ async def public_stats():
 
 @router.get("/", response_class=HTMLResponse)
 async def status_page(request: Request):
-    """認証不要のステータスページ。利用方法と蓄積データを表示する。"""
+    """認証不要のステータスページ。利用方法と蓄積データを表示する（status.public が true のときだけ）。"""
+    _require_public()
     base_url = str(request.base_url).rstrip("/")
     return HTMLResponse(_render_html(base_url))
 

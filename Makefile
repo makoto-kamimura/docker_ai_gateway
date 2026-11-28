@@ -1,7 +1,7 @@
 COMPOSE := docker compose -f platform/docker-compose.yml
 .DEFAULT_GOAL := help
 
-.PHONY: help setup up up-lite up-standard up-full down build logs ps clean
+.PHONY: help setup up up-lite up-standard up-full down build logs ps clean test
 
 help:
 	@echo "Usage:"
@@ -22,6 +22,7 @@ help:
 	@echo "  make logs         gateway のログを tail"
 	@echo "  make ps           サービス一覧を表示"
 	@echo "  make clean        全コンテナ・ボリュームを削除"
+	@echo "  make test         自動テスト（app/tests。DB・LLM には触れない）"
 
 setup:
 	@if [ ! -f platform/.env ]; then \
@@ -58,3 +59,8 @@ ps:
 
 clean:
 	COMPOSE_PROFILES=local-llm,monitoring $(COMPOSE) down -v --remove-orphans
+
+# 自動テスト（DB・Ollama・外部の LLM には触れない）。メモリ上限を付けたコンテナで動かす
+test:
+	docker run --rm -m 1200m -v $(CURDIR)/app:/app -w /app python:3.12-slim \
+	  sh -c 'pip install -q --no-cache-dir --root-user-action=ignore -r requirements-dev.txt && python -m pytest -q'

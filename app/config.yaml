@@ -4,6 +4,11 @@ gateway:
   api_key: ${GATEWAY_API_KEY}
 
 cache:
+  # enabled: キャッシュを使うか（環境変数 GATEWAY_CACHE_ENABLED で上書きできる）
+  enabled: true
+  # local_only: true = ローカルモデル（Ollama）の答えだけキャッシュする / false = 外部の LLM の答えもキャッシュする
+  #   （環境変数 GATEWAY_CACHE_LOCAL_ONLY で上書きできる。どちらでも app と tenant が一致する範囲だけ）
+  local_only: true
   similarity_threshold: 0.92
   default_ttl_hours: null    # null = 無期限
 
@@ -32,3 +37,12 @@ finetuning:
   min_samples: 500
   quality_threshold: 0.8
   lora_rank: 16
+
+knowledge:
+  # 質問と答えを貯める（ファインチューニングの材料）。外部の LLM の答えも残るため、既定では止める
+  enabled: false
+  local_only: true
+
+status:
+  # 認証なしのステータスページ（GET / と GET /stats）を出すか
+  public: false
